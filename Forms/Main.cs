@@ -174,7 +174,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                         }
 
                         // wait briefly to avoid spamming compendium, then advance progress
-                        System.Threading.Thread.Sleep(200);
+                        //System.Threading.Thread.Sleep(200);
                         progress.Advance();
                     }
                 }
