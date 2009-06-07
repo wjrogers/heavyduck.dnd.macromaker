@@ -81,6 +81,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
             string macro_path = macro_box.Text;
             List<PowerInfo> powers = new List<PowerInfo>();
             Dictionary<string, string> power_definitions = new Dictionary<string, string>();
+            System.Text.RegularExpressions.Regex img_remover = new System.Text.RegularExpressions.Regex(@"<img.*?>", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
             d.AddTask((progress) =>
             {
@@ -103,6 +104,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                     {
                         string name;
                         string action_type;
+                        List<string> compendium_info = new List<string>();
                         PowerUsage usage;
 
                         try
@@ -113,24 +115,45 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                             action_type = power_iter.Current.SelectSingleNode("specific[@name = 'Action Type']").Value.Trim();
 
                             // get the url for the power in the compendium and attempt to retrieve it
-                            temp_nav = null; // nav.SelectSingleNode("//RulesElementTally/RulesElement[@name = \"" + name + "\"]/@url");
+                            temp_nav = nav.SelectSingleNode("//RulesElementTally/RulesElement[@name = \"" + name + "\"]/@url");
                             if (temp_nav != null)
                             {
                                 HtmlAgilityPack.HtmlDocument scraper_doc = new HtmlAgilityPack.HtmlDocument();
                                 HtmlAgilityPack.HtmlNodeNavigator scraper_result;
+                                XPathNodeIterator content_iter;
                                 XPathNavigator scraper_nav;
+                                bool found_flavor = false;
 
                                 // slurp
                                 using (Stream s = m_compendium.GetEntryByUrl(temp_nav.Value))
                                 {
-                                    scraper_doc.Load(s);
+                                    scraper_doc.Load(s, new UTF8Encoding());
                                     scraper_nav = scraper_doc.CreateNavigator();
                                 }
-                                    
-                                // save the content part
-                                scraper_result = scraper_nav.SelectSingleNode("//div[@id = 'detail']") as HtmlAgilityPack.HtmlNodeNavigator;
-                                if (scraper_result != null)
-                                    power_definitions[name] = scraper_result.CurrentNode.OuterHtml;
+
+                                // select all the detail p tags
+                                content_iter = scraper_nav.Select("//div[@id = 'detail']/p");
+
+                                // loop through them
+                                while (content_iter.MoveNext())
+                                {
+                                    // look for flavor text
+                                    if (!found_flavor)
+                                    {
+                                        scraper_result = content_iter.Current.SelectSingleNode("i") as HtmlAgilityPack.HtmlNodeNavigator;
+                                        if (scraper_result != null)
+                                        {
+                                            compendium_info.Add(scraper_result.CurrentNode.OuterHtml);
+                                            found_flavor = true;
+                                            continue;
+                                        }
+                                    }
+
+                                    // after that, add the line (removing images), except for the publishing stuff
+                                    scraper_result = content_iter.Current as HtmlAgilityPack.HtmlNodeNavigator;
+                                    if (scraper_result != null && !scraper_result.CurrentNode.InnerHtml.ToLowerInvariant().Contains("published in"))
+                                        compendium_info.Add(img_remover.Replace(scraper_result.CurrentNode.InnerHtml, "-"));
+                                }
                             }
 
                             // select weapons
@@ -139,13 +162,13 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                             // some powers aren't attacks or don't use weapons
                             if (weapon_iter.Count < 1)
                             {
-                                powers.Add(new PowerInfo(name, WEAPON_NONE, usage, action_type));
+                                powers.Add(new PowerInfo(name, compendium_info, WEAPON_NONE, usage, action_type));
                             }
                             else
                             {
                                 while (weapon_iter.MoveNext())
                                 {
-                                    PowerInfo power = new PowerInfo(name, weapon_iter.Current.SelectSingleNode("@name").Value, usage, action_type);
+                                    PowerInfo power = new PowerInfo(name, compendium_info, weapon_iter.Current.SelectSingleNode("@name").Value, usage, action_type);
 
                                     // when there is more than one weapon, skip the Unarmed weapon
                                     if (power.Weapon == WEAPON_UNARMED && weapon_iter.Count > 1)
@@ -174,7 +197,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                         }
 
                         // wait briefly to avoid spamming compendium, then advance progress
-                        //System.Threading.Thread.Sleep(200);
+                        System.Threading.Thread.Sleep(200);
                         progress.Advance();
                     }
                 }
@@ -189,7 +212,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                     XmlWriterSettings settings;
 
                     settings = new XmlWriterSettings();
-                    settings.Encoding = new UTF8Encoding(false);
+                    settings.Encoding = new System.Text.ASCIIEncoding();
                     settings.Indent = true;
                     settings.IndentChars = "  ";
                     settings.OmitXmlDeclaration = false;
@@ -223,7 +246,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                             }
 
                             // start with the table and header
-                            command.AppendLine("<table border=\"0\" width=\"300\">");
+                            command.AppendLine("<table border=\"0\">");
                             command.AppendFormat("<tr bgcolor=\"{0}\" style=\"color: white;\">", background);
                             command.AppendLine();
                             command.AppendFormat("<th align=\"left\" style=\"font-size: 1.1em; padding: 2px 4px;\">{0}</th>", power.Name);
@@ -231,6 +254,10 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                             command.AppendFormat("<td align=\"right\" valign=\"middle\" style=\"padding: 2px;\">{0}</td></tr>", power.ActionType);
                             command.AppendLine();
                             command.AppendLine("</tr>");
+
+                            // write compendium info
+                            foreach (string line in power.CompendiumInfo)
+                                command.AppendLine("<tr><td colspan=\"2\">" + line + "</td></tr>");
 
                             // when we have a weapon, put the macro in the weapon's group and include the rolls
                             if (power.Weapon != WEAPON_NONE)
@@ -319,6 +346,8 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
 
         protected class PowerInfo
         {
+            private List<string> m_compendium_info;
+
             public string Name { get; set; }
             public string Weapon { get; set; }
             public PowerUsage Usage { get; set; }
@@ -328,12 +357,22 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
             public string DamageExpression { get; set; }
             public string Defense { get; set; }
 
-            public PowerInfo(string name, string weapon, PowerUsage usage, string action_type)
+            public List<string> CompendiumInfo
             {
+                get { return m_compendium_info; }
+            }
+
+            public PowerInfo(string name, List<string> compendium_info, string weapon, PowerUsage usage, string action_type)
+            {
+                if (compendium_info == null)
+                    throw new ArgumentNullException("compendium");
+
                 this.Name = name;
                 this.Weapon = weapon;
                 this.Usage = usage;
                 this.ActionType = action_type;
+
+                m_compendium_info = compendium_info;
             }
         }
 
