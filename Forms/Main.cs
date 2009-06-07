@@ -17,6 +17,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
     public partial class Main : Form
     {
         protected const string WEAPON_NONE = "NONE";
+        protected const string WEAPON_UNARMED = "Unarmed";
         protected const string MACRO_ELEMENT_NAME = "net.rptools.maptool.model.MacroButtonProperties";
 
         private readonly CompendiumHelper m_compendium = new CompendiumHelper();
@@ -146,11 +147,21 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                                 {
                                     PowerInfo power = new PowerInfo(name, weapon_iter.Current.SelectSingleNode("@name").Value, usage, action_type);
 
+                                    // when there is more than one weapon, skip the Unarmed weapon
+                                    if (power.Weapon == WEAPON_UNARMED && weapon_iter.Count > 1)
+                                        continue;
+
+                                    // read the attack info
                                     power.AttackBonus = weapon_iter.Current.SelectSingleNode("AttackBonus").ValueAsInt;
-                                    power.AttackStat = Util.EnumParse<Stat>(weapon_iter.Current.SelectSingleNode("AttackStat").Value);
+                                    power.AttackStat = weapon_iter.Current.SelectSingleNode("AttackStat").Value.Trim();
                                     power.DamageExpression = weapon_iter.Current.SelectSingleNode("Damage").Value.Trim();
                                     power.Defense = weapon_iter.Current.SelectSingleNode("Defense").Value.Trim();
 
+                                    // all powers list an Unarmed weapon, even if they don't include an attack, set these to WEAPON_NONE
+                                    if (power.Defense == "")
+                                        power.Weapon = WEAPON_NONE;
+
+                                    // add it to the list
                                     powers.Add(power);
                                 }
                             }
@@ -224,7 +235,9 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                             // when we have a weapon, put the macro in the weapon's group and include the rolls
                             if (power.Weapon != WEAPON_NONE)
                             {
-                                w.WriteElementString("group", power.Weapon);
+                                // ...but put unarmed attacks in the default group
+                                if (power.Weapon != WEAPON_UNARMED)
+                                    w.WriteElementString("group", power.Weapon);
 
                                 command.AppendLine("<tr><td colspan=\"2\"><i>" + power.Weapon + "</i></td></tr>");
                                 command.AppendFormat("<tr><td nowrap><b>[1d20+{0}]</b></td><td><b>vs. {1}</b></td></tr>", power.AttackBonus, power.Defense);
@@ -311,7 +324,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
             public PowerUsage Usage { get; set; }
             public string ActionType { get; set; }
             public int AttackBonus { get; set; }
-            public Stat AttackStat { get; set; }
+            public string AttackStat { get; set; }
             public string DamageExpression { get; set; }
             public string Defense { get; set; }
 
@@ -329,16 +342,6 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
             AtWill,
             Encounter,
             Daily
-        }
-
-        protected enum Stat
-        {
-            Strength,
-            Constitution,
-            Dexterity,
-            Intelligence,
-            Wisdom,
-            Charisma
         }
     }
 }
