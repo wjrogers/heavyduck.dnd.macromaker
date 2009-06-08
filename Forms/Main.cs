@@ -133,7 +133,6 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                                 HtmlAgilityPack.HtmlNodeNavigator scraper_result;
                                 XPathNodeIterator content_iter;
                                 XPathNavigator scraper_nav = null;
-                                bool found_flavor = false;
 
                                 // slurp
                                 try
@@ -162,19 +161,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                                     // loop through them
                                     while (content_iter.MoveNext())
                                     {
-                                        // look for flavor text
-                                        if (!found_flavor)
-                                        {
-                                            scraper_result = content_iter.Current.SelectSingleNode("i") as HtmlAgilityPack.HtmlNodeNavigator;
-                                            if (scraper_result != null)
-                                            {
-                                                compendium_info.Add(scraper_result.CurrentNode.OuterHtml);
-                                                found_flavor = true;
-                                                continue;
-                                            }
-                                        }
-
-                                        // after that, add the line (removing images), except for the publishing stuff
+                                        // add the line, but skip publishing stuff and strip images
                                         scraper_result = content_iter.Current as HtmlAgilityPack.HtmlNodeNavigator;
                                         if (scraper_result != null && !scraper_result.CurrentNode.InnerHtml.ToLowerInvariant().Contains("published in"))
                                             compendium_info.Add(img_remover.Replace(scraper_result.CurrentNode.InnerHtml, "-"));
