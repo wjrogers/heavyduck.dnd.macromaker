@@ -115,7 +115,7 @@
             this.Controls.Add(this.character_box);
             this.Controls.Add(this.label1);
             this.Name = "Main";
-            this.Text = "Token Converter";
+            this.Text = "Macro Maker";
             this.ResumeLayout(false);
             this.PerformLayout();
 

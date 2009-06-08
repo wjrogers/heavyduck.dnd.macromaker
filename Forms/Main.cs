@@ -26,6 +26,9 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
         {
             InitializeComponent();
 
+            // use form icon from resource
+            this.Icon = Properties.Resources.computebot;
+
             // event handlers
             this.Load += new EventHandler(Main_Load);
             this.FormClosed += new FormClosedEventHandler(Main_FormClosed);
