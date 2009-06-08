@@ -132,38 +132,53 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                                 HtmlAgilityPack.HtmlDocument scraper_doc = new HtmlAgilityPack.HtmlDocument();
                                 HtmlAgilityPack.HtmlNodeNavigator scraper_result;
                                 XPathNodeIterator content_iter;
-                                XPathNavigator scraper_nav;
+                                XPathNavigator scraper_nav = null;
                                 bool found_flavor = false;
 
                                 // slurp
-                                using (Stream s = m_compendium.GetEntryByUrl(power_url_nav.Value))
+                                try
                                 {
-                                    scraper_doc.Load(s, new UTF8Encoding());
-                                    scraper_nav = scraper_doc.CreateNavigator();
+                                    using (Stream s = m_compendium.GetEntryByUrl(power_url_nav.Value))
+                                    {
+                                        scraper_doc.Load(s, new UTF8Encoding());
+                                        scraper_nav = scraper_doc.CreateNavigator();
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    // if the user clicked cancel, stop attempting compendium stuff
+                                    if (ex is ApplicationException && ex.Message.ToLowerInvariant().Contains("user refused"))
+                                        m_use_compendium = false;
+                                    else
+                                        MessageBox.Show(ex.ToString(), "Compendium Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                                 }
 
-                                // select all the detail p tags
-                                content_iter = scraper_nav.Select("//div[@id = 'detail']/p");
-
-                                // loop through them
-                                while (content_iter.MoveNext())
+                                // if the web request succeeded...
+                                if (scraper_nav != null)
                                 {
-                                    // look for flavor text
-                                    if (!found_flavor)
-                                    {
-                                        scraper_result = content_iter.Current.SelectSingleNode("i") as HtmlAgilityPack.HtmlNodeNavigator;
-                                        if (scraper_result != null)
-                                        {
-                                            compendium_info.Add(scraper_result.CurrentNode.OuterHtml);
-                                            found_flavor = true;
-                                            continue;
-                                        }
-                                    }
+                                    // select all the detail p tags
+                                    content_iter = scraper_nav.Select("//div[@id = 'detail']/p");
 
-                                    // after that, add the line (removing images), except for the publishing stuff
-                                    scraper_result = content_iter.Current as HtmlAgilityPack.HtmlNodeNavigator;
-                                    if (scraper_result != null && !scraper_result.CurrentNode.InnerHtml.ToLowerInvariant().Contains("published in"))
-                                        compendium_info.Add(img_remover.Replace(scraper_result.CurrentNode.InnerHtml, "-"));
+                                    // loop through them
+                                    while (content_iter.MoveNext())
+                                    {
+                                        // look for flavor text
+                                        if (!found_flavor)
+                                        {
+                                            scraper_result = content_iter.Current.SelectSingleNode("i") as HtmlAgilityPack.HtmlNodeNavigator;
+                                            if (scraper_result != null)
+                                            {
+                                                compendium_info.Add(scraper_result.CurrentNode.OuterHtml);
+                                                found_flavor = true;
+                                                continue;
+                                            }
+                                        }
+
+                                        // after that, add the line (removing images), except for the publishing stuff
+                                        scraper_result = content_iter.Current as HtmlAgilityPack.HtmlNodeNavigator;
+                                        if (scraper_result != null && !scraper_result.CurrentNode.InnerHtml.ToLowerInvariant().Contains("published in"))
+                                            compendium_info.Add(img_remover.Replace(scraper_result.CurrentNode.InnerHtml, "-"));
+                                    }
                                 }
                             }
 
