@@ -161,10 +161,22 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                                     // loop through them
                                     while (content_iter.MoveNext())
                                     {
-                                        // add the line, but skip publishing stuff and strip images
+                                        string line;
+
+                                        // cast to HtmlNodeNavigator
                                         scraper_result = content_iter.Current as HtmlAgilityPack.HtmlNodeNavigator;
-                                        if (scraper_result != null && !scraper_result.CurrentNode.InnerHtml.ToLowerInvariant().Contains("published in"))
-                                            compendium_info.Add(img_remover.Replace(scraper_result.CurrentNode.InnerHtml, "-"));
+
+                                        // skip publishing stuff
+                                        if (scraper_result == null || scraper_result.CurrentNode.InnerHtml.ToLowerInvariant().Contains("published in"))
+                                            continue;
+
+                                        // grab the line, strip images, and remove [] stuff
+                                        line = scraper_result.CurrentNode.InnerHtml;
+                                        line = img_remover.Replace(line, "-");
+                                        line = line.Replace("[W]", "<i>W</i>");
+
+                                        // add the line
+                                        compendium_info.Add(line);
                                     }
                                 }
                             }
