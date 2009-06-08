@@ -21,6 +21,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
         protected const string MACRO_ELEMENT_NAME = "net.rptools.maptool.model.MacroButtonProperties";
 
         private readonly CompendiumHelper m_compendium = new CompendiumHelper();
+        private bool m_use_compendium;
 
         public Main()
         {
@@ -86,6 +87,9 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
             Dictionary<string, string> power_definitions = new Dictionary<string, string>();
             System.Text.RegularExpressions.Regex img_remover = new System.Text.RegularExpressions.Regex(@"<img.*?>", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
+            // save the value of the checkbox
+            m_use_compendium = compendium_check.Checked;
+
             d.AddTask((progress) =>
             {
                 progress.Update("Scanning powers...");
@@ -93,7 +97,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                 using (FileStream fs = File.OpenRead(character_path))
                 {
                     XPathDocument doc = new XPathDocument(fs);
-                    XPathNavigator nav = doc.CreateNavigator(), temp_nav;
+                    XPathNavigator nav = doc.CreateNavigator();
                     XPathNodeIterator power_iter, weapon_iter;
 
                     // select all power nodes
@@ -109,6 +113,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                         string action_type;
                         List<string> compendium_info = new List<string>();
                         PowerUsage usage;
+                        XPathNavigator power_url_nav = null;
 
                         try
                         {
@@ -117,9 +122,12 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                             usage = Util.EnumParse<PowerUsage>(power_iter.Current.SelectSingleNode("specific[@name = 'Power Usage']").Value.Replace("-", ""));
                             action_type = power_iter.Current.SelectSingleNode("specific[@name = 'Action Type']").Value.Trim();
 
-                            // get the url for the power in the compendium and attempt to retrieve it
-                            temp_nav = nav.SelectSingleNode("//RulesElementTally/RulesElement[@name = \"" + name + "\"]/@url");
-                            if (temp_nav != null)
+                            // get the url for the power in the compendium
+                            if (m_use_compendium)
+                                power_url_nav = nav.SelectSingleNode("//RulesElementTally/RulesElement[@name = \"" + name + "\"]/@url");
+
+                            // ...and if we did that, pull down the power description
+                            if (power_url_nav != null)
                             {
                                 HtmlAgilityPack.HtmlDocument scraper_doc = new HtmlAgilityPack.HtmlDocument();
                                 HtmlAgilityPack.HtmlNodeNavigator scraper_result;
@@ -128,7 +136,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                                 bool found_flavor = false;
 
                                 // slurp
-                                using (Stream s = m_compendium.GetEntryByUrl(temp_nav.Value))
+                                using (Stream s = m_compendium.GetEntryByUrl(power_url_nav.Value))
                                 {
                                     scraper_doc.Load(s, new UTF8Encoding());
                                     scraper_nav = scraper_doc.CreateNavigator();
@@ -199,8 +207,11 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                             MessageBox.Show(ex.ToString(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         }
 
-                        // wait briefly to avoid spamming compendium, then advance progress
-                        System.Threading.Thread.Sleep(200);
+                        // wait briefly to avoid spamming compendium
+                        if (m_use_compendium)
+                            System.Threading.Thread.Sleep(200);
+
+                        // advance progress
                         progress.Advance();
                     }
                 }
@@ -254,7 +265,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                             command.AppendLine();
                             command.AppendFormat("<th align=\"left\" style=\"font-size: 1.1em; padding: 2px 4px;\">{0}</th>", power.Name);
                             command.AppendLine();
-                            command.AppendFormat("<td align=\"right\" valign=\"middle\" style=\"padding: 2px;\">{0}</td></tr>", power.ActionType);
+                            command.AppendFormat("<td align=\"right\" valign=\"middle\" style=\"padding: 2px 4px;\"><i>{0}</i></td></tr>", power.Weapon == WEAPON_NONE ? "" : power.Weapon);
                             command.AppendLine();
                             command.AppendLine("</tr>");
 
@@ -269,7 +280,6 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                                 if (power.Weapon != WEAPON_UNARMED)
                                     w.WriteElementString("group", power.Weapon);
 
-                                command.AppendLine("<tr><td colspan=\"2\"><i>" + power.Weapon + "</i></td></tr>");
                                 command.AppendFormat("<tr><td nowrap><b>[1d20+{0}]</b></td><td><b>vs. {1}</b></td></tr>", power.AttackBonus, power.Defense);
                                 command.AppendLine();
                                 command.AppendFormat("<tr><td nowrap>[{0}]</td><td>damage</td></tr>", power.DamageExpression);
