@@ -84,7 +84,6 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
             string character_path = character_box.Text;
             string macro_path = macro_box.Text;
             List<PowerInfo> powers = new List<PowerInfo>();
-            Dictionary<string, string> power_definitions = new Dictionary<string, string>();
             System.Text.RegularExpressions.Regex img_remover = new System.Text.RegularExpressions.Regex(@"<img.*?>", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
             // save the value of the checkbox
