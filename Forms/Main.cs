@@ -84,6 +84,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
             string character_path = character_box.Text;
             string macro_path = macro_box.Text;
             List<PowerInfo> powers = new List<PowerInfo>();
+            Dictionary<string, int> skills = new Dictionary<string, int>();
             System.Text.RegularExpressions.Regex img_remover = new System.Text.RegularExpressions.Regex(@"<img.*?>", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
             // save the value of the checkbox
@@ -91,7 +92,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
 
             d.AddTask((progress) =>
             {
-                progress.Update("Scanning powers...");
+                progress.Update("Scanning character sheet...");
 
                 using (FileStream fs = File.OpenRead(character_path))
                 {
@@ -227,6 +228,20 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                         // advance progress
                         progress.Advance();
                     }
+
+                    // detect skills from the RulesElementTally
+                    power_iter = nav.Select("//RulesElementTally/RulesElement[@type = 'Skill']/@name");
+
+                    // read the value for each one
+                    while (power_iter.MoveNext())
+                    {
+                        string name = power_iter.Current.Value;
+                        int value;
+                        XPathNavigator value_node = nav.SelectSingleNode("/D20Character/CharacterSheet/StatBlock/Stat[@name = '" + name + "']/@value");
+
+                        if (value_node != null && int.TryParse(value_node.Value, out value))
+                            skills[name] = value;
+                    }
                 }
             });
 
@@ -289,9 +304,7 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
                             // when we have a weapon, put the macro in the weapon's group and include the rolls
                             if (power.Weapon != WEAPON_NONE)
                             {
-                                // ...but put unarmed attacks in the default group
-                                if (power.Weapon != WEAPON_UNARMED)
-                                    w.WriteElementString("group", power.Weapon);
+                                w.WriteElementString("group", "Attacks - " + power.Weapon);
 
                                 command.AppendFormat("<tr><td nowrap><b>[1d20+{0}]</b></td><td><b>vs. {1}</b></td></tr>", power.AttackBonus, power.Defense);
                                 command.AppendLine();
@@ -304,6 +317,19 @@ namespace HeavyDuck.Dnd.MacroMaker.Forms
 
                             // write the command and end element
                             w.WriteElementString("command", command.ToString());
+                            w.WriteEndElement(); // MACRO_ELEMENT_NAME
+                        }
+
+                        // write skill check macros
+                        foreach (KeyValuePair<string, int> skill in skills)
+                        {
+                            // begin macro definition
+                            w.WriteStartElement(MACRO_ELEMENT_NAME);
+                            w.WriteElementString("saveLocation", "Token");
+                            w.WriteElementString("label", skill.Key);
+                            w.WriteElementString("autoExecute", "true");
+                            w.WriteElementString("group", "Skills");
+                            w.WriteElementString("command", string.Format("<p><b>{0} Check</b> [1d20+{1}]</p>", skill.Key, skill.Value));
                             w.WriteEndElement(); // MACRO_ELEMENT_NAME
                         }
 
